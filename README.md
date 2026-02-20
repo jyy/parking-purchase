@@ -47,6 +47,13 @@ python purchase.py tomorrow
 
 Optional: set `HEADLESS=true` in `.env` to run the browser in the background.
 
+## Pushing to GitHub
+
+This project has a git repo with `origin` set to `git@github.com:jyy/parking-purchase.git`. To push:
+
+1. Create an empty repository on GitHub: [Create repo](https://github.com/new?name=parking-purchase) (name: `parking-purchase`, no README or .gitignore).
+2. Push: `git push -u origin main`.
+
 ## Later: messenger integration
 
 You can trigger the same purchase flow from a messaging app (e.g. Signal, Telegram) by having a listener parse commands like "parking today" and call `run_purchase(target_date)` from `parkonect_purchase.py`. No changes to the purchase module are required.
