@@ -203,7 +203,6 @@ def _do_payment(page: Page, card_number: str, card_expiry: str, card_cvv: str) -
 def _detect_success_or_failure(page: Page) -> PurchaseResult:
     """Inspect the page after payment submit and return success or failure result."""
     url = page.url
-    content = page.content()
     text_lower = page.locator("body").inner_text().lower() if page.locator("body").count() > 0 else ""
     if "confirm" in text_lower and ("success" in text_lower or "thank" in text_lower or "receipt" in text_lower):
         return PurchaseResult(success=True, message="Purchase completed successfully.")
@@ -211,4 +210,7 @@ def _detect_success_or_failure(page: Page) -> PurchaseResult:
         return PurchaseResult(success=False, message="Payment may have been declined or validation failed. Check the page.")
     if "confirm" in url or "receipt" in url or "success" in url:
         return PurchaseResult(success=True, message="Purchase completed (confirmation URL detected).")
-    return PurchaseResult(success=True, message="Submit completed; verify confirmation on the site or via receipt.")
+    return PurchaseResult(
+        success=False,
+        message="Could not confirm success. Check the site or your receipt to verify the purchase.",
+    )
