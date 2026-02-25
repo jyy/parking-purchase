@@ -17,7 +17,7 @@ def _require(name: str) -> str:
 
 
 def get_parkonect_credentials() -> tuple[str, str]:
-    return _require("PARKONECT_EMAIL"), _require("PARKONECT_PASSWORD")
+    return _require("PARKONECT_USERNAME"), _require("PARKONECT_PASSWORD")
 
 
 def get_billing() -> tuple[str, str, str]:
@@ -38,3 +38,8 @@ def get_card() -> tuple[str, str, str]:
 
 def is_headless() -> bool:
     return os.environ.get("HEADLESS", "").strip().lower() in ("1", "true", "yes")
+
+
+def is_debug() -> bool:
+    """When True: browser is visible (headless=False) and payment is filled but not submitted."""
+    return os.environ.get("DEBUG", "").strip().lower() in ("1", "true", "yes")

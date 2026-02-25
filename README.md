@@ -25,7 +25,7 @@ Purchases a daily parking pass for 540 W Madison (Parkonect) via CLI. Uses Playw
 
 | Variable | Description |
 |----------|-------------|
-| `PARKONECT_EMAIL` | Parkonect account email (login) |
+| `PARKONECT_USERNAME` | Parkonect login (username or email) |
 | `PARKONECT_PASSWORD` | Parkonect account password |
 | `BILLING_FIRST_NAME` | Billing first name at checkout |
 | `BILLING_LAST_NAME` | Billing last name at checkout |
@@ -34,18 +34,24 @@ Purchases a daily parking pass for 540 W Madison (Parkonect) via CLI. Uses Playw
 | `CARD_EXPIRY` | Expiration, e.g. `MM/YY` |
 | `CARD_CVV` | CVV2 |
 | `HEADLESS` | Optional. `true` to run browser in background |
+| `DEBUG` | Optional. `true` = browser visible, fill payment form but do not submit (verify then press Enter to close) |
 
 ## Usage
 
 ```bash
-# Purchase for today
+# Purchase for today or tomorrow
 python purchase.py today
-
-# Purchase for tomorrow
 python purchase.py tomorrow
+
+# Purchase for a day of the week (next occurrence; same day = today). Case insensitive.
+python purchase.py monday
+python purchase.py mon
+python purchase.py tue
+python purchase.py wednesday
+python purchase.py fri
 ```
 
-Optional: set `HEADLESS=true` in `.env` to run the browser in the background.
+Optional: set `HEADLESS=true` in `.env` to run the browser in the background. Set `DEBUG=true` for interactive mode: browser visible, and at the payment page you get Y/n prompts to fill the form and to submit (e.g. "Fill payment form? (Y/n):", "Submit payment? (Y/n):").
 
 ## Pushing to GitHub
 
