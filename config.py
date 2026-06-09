@@ -1,6 +1,7 @@
 """Load .env and expose credentials and flags for the purchase flow."""
 import os
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -34,6 +35,15 @@ def get_card() -> tuple[str, str, str]:
         _require("CARD_EXPIRY"),
         _require("CARD_CVV"),
     )
+
+
+def get_backup_card() -> Optional[tuple[str, str, str]]:
+    num = os.environ.get("BACKUP_CARD_NUMBER")
+    exp = os.environ.get("BACKUP_CARD_EXPIRY")
+    cvv = os.environ.get("BACKUP_CARD_CVV")
+    if not num or not num.strip():
+        return None
+    return num.strip(), (exp or "").strip(), (cvv or "").strip()
 
 
 def is_headless() -> bool:

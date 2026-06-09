@@ -11,6 +11,7 @@ from playwright.sync_api import Page, sync_playwright, TimeoutError as Playwrigh
 from config import (
     get_billing,
     get_card,
+    get_backup_card,
     get_parkonect_credentials,
     is_debug,
     is_headless,
@@ -38,14 +39,72 @@ class PurchaseResult:
 def run_purchase(target_date: date) -> PurchaseResult:
     """
     Run the full purchase flow for the given date.
-    Returns a result suitable for CLI output or messenger reply.
+    Supports retry on payment decline if backup card details are available.
     """
     email, password = get_parkonect_credentials()
     billing_first, billing_last, phone = get_billing()
     card_number, card_expiry, card_cvv = get_card()
+    backup_card = get_backup_card()
     debug = is_debug()
     headless = False if debug else is_headless()
 
+    # Try with primary card first, then backup card if primary is declined
+    cards_to_try = [("primary", card_number, card_expiry, card_cvv)]
+    if backup_card:
+        cards_to_try.append(("backup", backup_card[0], backup_card[1], backup_card[2]))
+
+    for card_name, c_num, c_exp, c_cvv in cards_to_try:
+        if card_name == "backup":
+            msg = f"🔄 Primary payment declined. Retrying purchase with backup payment info for {target_date}..."
+            print(msg)
+            try:
+                from telegram_notify import send_message
+                send_message(msg)
+            except Exception:
+                pass
+
+        result = _run_purchase_attempt(
+            target_date=target_date,
+            email=email,
+            password=password,
+            billing_first=billing_first,
+            billing_last=billing_last,
+            phone=phone,
+            card_number=c_num,
+            card_expiry=c_exp,
+            card_cvv=c_cvv,
+            headless=headless,
+            debug=debug,
+        )
+
+        if result.success:
+            if card_name == "backup":
+                result.message = f"Backup payment succeeded! {result.message}"
+            return result
+
+        # Check if the failure is a known payment decline/login redirect to trigger backup retry
+        is_decline = "payment declined" in result.message.lower() or "decline on page" in result.message.lower()
+        if card_name == "primary" and backup_card and is_decline:
+            continue
+
+        return result
+
+    return PurchaseResult(success=False, message="Purchase failed.")
+
+
+def _run_purchase_attempt(
+    target_date: date,
+    email: str,
+    password: str,
+    billing_first: str,
+    billing_last: str,
+    phone: str,
+    card_number: str,
+    card_expiry: str,
+    card_cvv: str,
+    headless: bool,
+    debug: bool,
+) -> PurchaseResult:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
@@ -108,6 +167,7 @@ def run_purchase(target_date: date) -> PurchaseResult:
                 pass
             msg = str(e).strip() or "unknown error"
             return PurchaseResult(success=False, message=f"Purchase failed: {msg}")
+
 
 
 def _set_date_and_search(page: Page, target_date: date) -> None:
