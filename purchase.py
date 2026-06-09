@@ -81,20 +81,14 @@ def main() -> None:
     except ValueError as e:
         msg = f"❌ Failed: {e}"
         print(msg)
-        from telegram_notify import send_message
-        send_message(msg)
         sys.exit(1)
 
     if result.success:
         msg = f"✅ Success: {result.message}"
         print(msg)
-        from telegram_notify import send_message
-        send_message(msg)
     else:
         msg = f"❌ Failed: {result.message}"
         print(msg)
-        from telegram_notify import send_message
-        send_message(msg)
 
 
 if __name__ == "__main__":
