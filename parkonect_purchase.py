@@ -502,6 +502,8 @@ def _detect_success_or_failure(page: Page) -> PurchaseResult:
     if "error" in text_lower or "declined" in text_lower or "invalid" in text_lower:
         snippet = text_lower[:250].replace("\n", " ").strip()
         return PurchaseResult(success=False, message=f"Purchase failed: error/decline on page. URL: {page.url}. Snippet: {snippet}")
+    if "login.aspx" in url:
+        return PurchaseResult(success=False, message="Purchase failed: payment declined (redirected back to login page).")
     if "confirm" in url or "receipt" in url or "success" in url:
         return PurchaseResult(success=True, message="Purchase successful.")
     if "dashboard" in text_lower and ("my orders" in text_lower or "my account" in text_lower):
