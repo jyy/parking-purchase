@@ -79,13 +79,23 @@ def main() -> None:
     try:
         result: PurchaseResult = run_purchase(target)
     except ValueError as e:
-        print("Failed:", e)
-        exit(1)
+        msg = f"❌ Failed: {e}"
+        print(msg)
+        from telegram_notify import send_message
+        send_message(msg)
+        sys.exit(1)
+
     if result.success:
-        print("Success:", result.message)
+        msg = f"✅ Success: {result.message}"
+        print(msg)
+        from telegram_notify import send_message
+        send_message(msg)
     else:
-        print("Failed:", result.message)
-        exit(1)
+        msg = f"❌ Failed: {result.message}"
+        print(msg)
+        from telegram_notify import send_message
+        send_message(msg)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
