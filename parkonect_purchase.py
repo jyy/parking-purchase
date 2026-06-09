@@ -587,7 +587,25 @@ def _detect_success_or_failure(page: Page) -> PurchaseResult:
 def _extract_barcode_code(page: Page) -> Optional[str]:
     """Scrapes the raw barcode code or confirmation code from the receipt page."""
     try:
-        # 1. Try to find a barcode image tag
+        # 1. Check the specific receipt QR/barcode table cell CSS selector
+        selector = "#wrapper > table > tbody > tr:nth-child(2) > td > div.canvas > div.main > div:nth-child(5) > table:nth-child(1) > tbody > tr > td:nth-child(1) > table > tbody > tr:nth-child(2) > td"
+        target_cell = page.locator(selector).first
+        if target_cell.count() > 0:
+            cell_text = target_cell.inner_text().strip()
+            # Code matches "W" followed by 9 digits, e.g. W0721439022
+            match = re.search(r'\b(W\d{9})\b', cell_text)
+            if match:
+                return match.group(1)
+
+        # 2. Search the entire page body for the "W" + 9 digits pattern
+        body = page.locator("body").first
+        if body.count() > 0:
+            text = body.inner_text()
+            match = re.search(r'\b(W\d{9})\b', text)
+            if match:
+                return match.group(1)
+
+        # 3. Fallback: Find a barcode image tag
         barcode_img = page.locator('img[src*="barcode" i], img[id*="barcode" i], img[class*="barcode" i], img[alt*="barcode" i]').first
         if barcode_img.count() > 0:
             alt = barcode_img.get_attribute("alt")
@@ -604,7 +622,7 @@ def _extract_barcode_code(page: Page) -> Optional[str]:
                         return params[key][0]
                 return src
 
-        # 2. Try to find Print Pass or View Receipt link
+        # 4. Fallback: Find Print Pass or View Receipt link
         print_link = page.locator('a[href*="print" i], a[href*="pass" i], a[href*="receipt" i]').first
         if print_link.count() > 0:
             href = print_link.get_attribute("href")
@@ -617,8 +635,7 @@ def _extract_barcode_code(page: Page) -> Optional[str]:
                         return params[key][0]
                 return href
 
-        # 3. Text label search
-        body = page.locator("body").first
+        # 5. Fallback: General text label search
         if body.count() > 0:
             text = body.inner_text()
             match = re.search(r"(?:pass|barcode|confirmation)\s*(?:number|#)?\s*:\s*([a-zA-Z0-9-]+)", text, re.I)
@@ -627,3 +644,4 @@ def _extract_barcode_code(page: Page) -> Optional[str]:
     except Exception as e:
         print(f"[Warning] Failed to extract barcode code: {e}")
     return None
+
