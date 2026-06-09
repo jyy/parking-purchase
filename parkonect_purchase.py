@@ -2,6 +2,7 @@
 Parkonect 540 W Madison parking pass purchase flow.
 Single entrypoint run_purchase(target_date) for CLI or future messenger triggers.
 """
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -57,20 +58,20 @@ def run_purchase(target_date: date) -> PurchaseResult:
             _set_date_and_search(page, target_date)
 
             # Step 2: Choose pass (Daily Parking or fallback to Afternoon Special) and Reserve Now
-            reserve_clicked = _select_pass_and_reserve(page)
+            reserve_clicked = _select_pass_and_reserve(page, debug=debug)
             if not reserve_clicked:
                 browser.close()
-                return PurchaseResult(success=False, message="Purchase failed.")
+                return PurchaseResult(success=False, message="Purchase failed: could not select pass or click Reserve Now (check date and availability).")
 
             # Step 3: Login
             if not _do_login(page, email, password):
                 browser.close()
-                return PurchaseResult(success=False, message="Purchase failed.")
+                return PurchaseResult(success=False, message="Purchase failed: login failed.")
 
             # Step 4: Checkout – billing and phone, then Confirm My Purchase
             if not _do_checkout_billing(page, billing_first, billing_last, phone):
                 browser.close()
-                return PurchaseResult(success=False, message="Purchase failed.")
+                return PurchaseResult(success=False, message="Purchase failed: checkout/billing failed.")
 
             # Step 5: Payment – card details and Submit (interactive when debug)
             if debug:
@@ -89,7 +90,7 @@ def run_purchase(target_date: date) -> PurchaseResult:
 
             if not _do_payment(page, card_number, card_expiry, card_cvv, debug=False):
                 browser.close()
-                return PurchaseResult(success=False, message="Purchase failed.")
+                return PurchaseResult(success=False, message="Purchase failed: payment form failed.")
 
             # Step 6: Detect success or failure
             result = _detect_success_or_failure(page)
@@ -98,13 +99,15 @@ def run_purchase(target_date: date) -> PurchaseResult:
 
         except PlaywrightTimeoutError as e:
             browser.close()
-            return PurchaseResult(success=False, message="Purchase failed.")
+            msg = str(e).strip() or "timeout"
+            return PurchaseResult(success=False, message=f"Purchase failed: timeout ({msg}).")
         except Exception as e:
             try:
                 browser.close()
             except Exception:
                 pass
-            return PurchaseResult(success=False, message="Purchase failed.")
+            msg = str(e).strip() or "unknown error"
+            return PurchaseResult(success=False, message=f"Purchase failed: {msg}")
 
 
 def _set_date_and_search(page: Page, target_date: date) -> None:
@@ -148,23 +151,47 @@ def _set_date_and_search(page: Page, target_date: date) -> None:
     return
 
 
-def _select_pass_and_reserve(page: Page) -> bool:
+def _select_pass_and_reserve(page: Page, *, debug: bool = False) -> bool:
     """Select Daily Parking if available, else Afternoon Special; click Reserve Now. Returns True if clicked."""
-    # Prefer Daily Parking; fallback to Afternoon Special if Daily shows 0 spaces or no button
+    reserve_text = re.compile(r"reserve\s*now", re.I)
+    # Parkonect uses table id GridViewSpecials; Reserve Now is <input type="button" value="Reserve Now" class="reservenow">
+    reserve_selector = "a, button, input[type='submit'], input[type='button']"
+    grid = page.locator("#ctl00_ContentPlaceHolder1_GridViewSpecials").or_(page.locator("table.events[id*='GridViewSpecials']"))
     for pass_name in ("Daily Parking", "Afternoon Special"):
-        row = page.locator("tr").filter(has_text=pass_name).first
+        row = grid.locator("tr").filter(has_text=pass_name).first
         if row.count() == 0:
+            if debug:
+                print(f"[DEBUG] No row found for '{pass_name}'")
             continue
         row_text = row.inner_text()
-        if "0 spaces remain" in row_text or "sold out" in row_text.lower():
+        # Only skip if actually 0/sold out (e.g. "100 spaces remain" must not match)
+        if re.search(r"\b0\s+spaces\s+remain", row_text, re.I) or "sold out" in row_text.lower():
+            if debug:
+                print(f"[DEBUG] '{pass_name}' skipped: {row_text[:80]}...")
             continue
-        reserve = row.get_by_role("link", name="Reserve Now").or_(row.get_by_role("button", name="Reserve Now")).first
+        # Reserve Now on Parkonect is input type=button with value="Reserve Now" (same row, last td)
+        reserve = (
+            row.get_by_role("button", name="Reserve Now")
+            .or_(row.locator("input.reservenow, input[type='button'][value='Reserve Now']"))
+            .or_(row.locator(f"{reserve_selector}").filter(has_text=reserve_text))
+            .first
+        )
         if reserve.count() == 0:
-            reserve = row.locator("a:has-text('Reserve Now'), button:has-text('Reserve Now')").first
+            reserve = row.locator("a:has-text('Reserve Now'), button:has-text('Reserve Now'), input[value*='Reserve']").first
         if reserve.count() > 0:
+            if debug:
+                print(f"[DEBUG] Clicking Reserve Now for '{pass_name}'")
             reserve.click()
             page.wait_for_load_state("networkidle")
             return True
+        if debug:
+            print(f"[DEBUG] Row found for '{pass_name}' but no Reserve Now link/button. Row text: {row_text[:120]}...")
+    if debug:
+        # Dump a snippet of page text so we can see what's actually there
+        body = page.locator("body").first
+        if body.count() > 0:
+            snippet = body.inner_text()[:500].replace("\n", " ")
+            print(f"[DEBUG] Page body snippet: {snippet}...")
     return False
 
 

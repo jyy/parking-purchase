@@ -1,0 +1,12 @@
+services:
+  parking-bot:
+    build: .
+    container_name: parking-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TB_TOKEN=${TB_TOKEN}
+      - HEADLESS=true
+    volumes:
+      - ./data:/root/.config
