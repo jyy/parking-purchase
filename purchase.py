@@ -85,6 +85,8 @@ def main() -> None:
 
     if result.success:
         msg = f"✅ Success: {result.message}"
+        if result.code:
+            msg += f" (Pass Code: {result.code})"
         print(msg)
     else:
         msg = f"❌ Failed: {result.message}"

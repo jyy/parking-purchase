@@ -5,6 +5,7 @@ Single entrypoint run_purchase(target_date) for CLI or future messenger triggers
 import re
 from dataclasses import dataclass
 from datetime import date
+from typing import Optional
 
 from playwright.sync_api import Page, sync_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -34,6 +35,7 @@ def _confirm(prompt: str, default: bool = True) -> bool:
 class PurchaseResult:
     success: bool
     message: str
+    code: Optional[str] = None
 
 
 def run_purchase(target_date: date) -> PurchaseResult:
@@ -557,19 +559,71 @@ def _detect_success_or_failure(page: Page) -> PurchaseResult:
     """Inspect the page after payment submit and return success or failure result."""
     url = page.url.lower()
     text_lower = page.locator("body").inner_text().lower() if page.locator("body").count() > 0 else ""
+    
+    is_success = False
     if "confirm" in text_lower and ("success" in text_lower or "thank" in text_lower or "receipt" in text_lower):
-        return PurchaseResult(success=True, message="Purchase successful.")
+        is_success = True
+    elif "confirm" in url or "receipt" in url or "success" in url:
+        is_success = True
+    elif "dashboard" in text_lower and ("my orders" in text_lower or "my account" in text_lower):
+        is_success = True
+    elif "default.aspx" in url or "myorders" in url:
+        is_success = True
+
+    if is_success:
+        code = _extract_barcode_code(page)
+        return PurchaseResult(success=True, message="Purchase successful.", code=code)
+
     if "error" in text_lower or "declined" in text_lower or "invalid" in text_lower:
         snippet = text_lower[:250].replace("\n", " ").strip()
         return PurchaseResult(success=False, message=f"Purchase failed: error/decline on page. URL: {page.url}. Snippet: {snippet}")
     if "login.aspx" in url:
         return PurchaseResult(success=False, message="Purchase failed: payment declined (redirected back to login page).")
-    if "confirm" in url or "receipt" in url or "success" in url:
-        return PurchaseResult(success=True, message="Purchase successful.")
-    if "dashboard" in text_lower and ("my orders" in text_lower or "my account" in text_lower):
-        return PurchaseResult(success=True, message="Purchase successful.")
-    if "default.aspx" in url or "myorders" in url:
-        return PurchaseResult(success=True, message="Purchase successful.")
     
     snippet = text_lower[:250].replace("\n", " ").strip()
     return PurchaseResult(success=False, message=f"Purchase failed: unknown landing page. URL: {page.url}. Snippet: {snippet}")
+
+
+def _extract_barcode_code(page: Page) -> Optional[str]:
+    """Scrapes the raw barcode code or confirmation code from the receipt page."""
+    try:
+        # 1. Try to find a barcode image tag
+        barcode_img = page.locator('img[src*="barcode" i], img[id*="barcode" i], img[class*="barcode" i], img[alt*="barcode" i]').first
+        if barcode_img.count() > 0:
+            alt = barcode_img.get_attribute("alt")
+            if alt and alt.strip().isdigit():
+                return alt.strip()
+            
+            src = barcode_img.get_attribute("src")
+            if src:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(src)
+                params = urllib.parse.parse_qs(parsed.query)
+                for key in ("code", "pass", "id"):
+                    if key in params:
+                        return params[key][0]
+                return src
+
+        # 2. Try to find Print Pass or View Receipt link
+        print_link = page.locator('a[href*="print" i], a[href*="pass" i], a[href*="receipt" i]').first
+        if print_link.count() > 0:
+            href = print_link.get_attribute("href")
+            if href:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(href)
+                params = urllib.parse.parse_qs(parsed.query)
+                for key in ("code", "pass", "id"):
+                    if key in params:
+                        return params[key][0]
+                return href
+
+        # 3. Text label search
+        body = page.locator("body").first
+        if body.count() > 0:
+            text = body.inner_text()
+            match = re.search(r"(?:pass|barcode|confirmation)\s*(?:number|#)?\s*:\s*([a-zA-Z0-9-]+)", text, re.I)
+            if match:
+                return match.group(1).strip()
+    except Exception as e:
+        print(f"[Warning] Failed to extract barcode code: {e}")
+    return None
