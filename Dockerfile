@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/playwright/python:v1.60.0-jammy
 
-# Install shell2telegram
+# Install shell2telegram and tzdata
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && rm -rf /var/lib/apt/lists/*
 ADD https://github.com/msoap/shell2telegram/releases/download/v1.10.0/shell2telegram_1.10.0_linux_amd64.tar.gz /tmp/s2t.tar.gz
 RUN tar -C /usr/local/bin -xzf /tmp/s2t.tar.gz shell2telegram && rm /tmp/s2t.tar.gz
 

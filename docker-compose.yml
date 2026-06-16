@@ -8,5 +8,24 @@ services:
     environment:
       - TB_TOKEN=${TB_TOKEN}
       - HEADLESS=true
+      - TZ=America/Chicago
     volumes:
       - ./data:/root/.config
+
+  parking-tunnel:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: parking-tunnel
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PORT=7290
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TZ=America/Chicago
+      - HEADLESS=true
+    volumes:
+      - ./.env:/app/.env
+    ports:
+      - "7290:7290"
